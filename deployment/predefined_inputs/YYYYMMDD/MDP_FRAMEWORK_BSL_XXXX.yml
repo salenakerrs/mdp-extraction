@@ -1,0 +1,5 @@
+workflow_deploy_inputs:
+  deployment_mode: initial | partial
+  ref: vX.Y.Z
+  baseline_no: MDP_FRAMEWORK_BSL_XXXX
+  deployment_sequence: first | 1..n | default | last

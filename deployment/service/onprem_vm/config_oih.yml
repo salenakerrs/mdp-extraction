@@ -1,0 +1,7 @@
+# onprem vm files location config
+file_location_config:
+  volumes:
+    script_app: "/app_oih/oih/script/extraction/"
+    sit_test: "/test/oih/sit/mdp_extraction_framework/"
+    exclude_existing_files:
+      - "/app_oih/oih/script/extraction/.env.secret"

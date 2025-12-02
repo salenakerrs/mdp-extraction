@@ -1,0 +1,17 @@
+[run]
+omit = */__init__.py, */__main__.py, */test_utils/*
+
+[report]
+exclude_also =
+    def entrypoint
+    def __init__
+    def execute
+    def unzip_file
+    def list_files_in_folder
+    if self\.debug
+    if __name__ == .__main__.:
+    @(abc\.)?abstractmethod
+    @dataclass.*
+    class\s+(\w+)\(BaseModel\)\:
+
+show_missing = True

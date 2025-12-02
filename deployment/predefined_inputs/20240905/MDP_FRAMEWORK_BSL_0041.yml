@@ -1,0 +1,5 @@
+workflow_deploy_inputs:
+  deployment_mode: partial
+  ref: v0.8.2
+  baseline_no: MDP_FRAMEWORK_BSL_0041
+  deployment_sequence: default

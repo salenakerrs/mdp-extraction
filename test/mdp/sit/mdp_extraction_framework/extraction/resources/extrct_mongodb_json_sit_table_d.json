@@ -1,0 +1,84 @@
+{
+    "job_name": "extrct_trf_fwtest_mongodb_json_sample_sit_d",
+    "pipeline_name": "ExtractionPipeline",
+    "area_name": "test_area",
+    "job_seq": 1,
+    "job_info": {
+        "data_source_name": "TEST_SOURCE",
+        "file_name": "extrct_sit_mongodb_json_table_d_20240424.csv",
+        "data_target_type": "AZURE_STORAGE_ACCOUNT",
+        "data_target_location": "fw_test/azcopy/extrct_sit_mongodb_json_table_d_{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}.csv"
+    },
+    "tasks": {
+        "source_data_extractor_task": {
+            "module_name": "MongoDataExtractorTask",
+            "bypass_flag": false,
+            "parameters": {
+                "connection_name": "krv_customer_campaign",
+                "query": "[{\"$limit\":300},{\"$project\":{\"_id\":1,\"campaign_id\":1,\"cis_id\":1,\"campaign_name\":1,\"tier_tier_id\":{\"$arrayElemAt\":[\"$tiers.tier_id\",0]},\"tier_tier_name\":{\"$arrayElemAt\":[\"$tiers.tier_name\",0]},\"tier_start_progress\":{\"$arrayElemAt\":[\"$tiers.start_progress\",0]},\"tier_end_progress\":{\"$arrayElemAt\":[\"$tiers.end_progress\",0]},\"tier_unit\":{\"$arrayElemAt\":[\"$tiers.unit\",0]},\"tier_point_amount\":{\"$arrayElemAt\":[\"$tiers.point_amount\",0]},\"tier_group_id\":{\"$arrayElemAt\":[\"$tiers.group_id\",0]},\"tier_remain\":{\"$arrayElemAt\":[\"$tiers.remain\",0]}}}]",
+                "json_file_location": "{{ local_storage.filepath }}/test_area/",
+                "extract_file_location": "{{ local_storage.filepath }}/test_area/",
+                "file_name_format": {
+                    "base_file_name": "extrct_sit_mongodb_json_table_d",
+                    "date_suffix": "{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}"
+                },
+                "full_file_name": "{{ base_file_name }}_{{ date_suffix }}",
+                "batch_size": 100,
+                "allow_zero_record": true,
+                "file_extension": "json"
+            }
+        },
+        "generate_control_file_task": {
+            "module_name": "MongoControlFileGeneratorTask",
+            "bypass_flag": false,
+            "parameters": {
+                "connection_name": "krv_customer_campaign",
+                "query": "[{\"$limit\":300},{\"$facet\":{\"count\":[{\"$count\":\"total\"}],\"currentDateTime\":[{\"$addFields\":{\"currentTime\":{\"$toDate\":\"$$NOW\"}}}],\"posDate\":[{\"$addFields\":{\"posDate\":\"{{pos_dt}}\"}}]}},{\"$project\":{\"record_count\":{\"$arrayElemAt\":[\"$count.total\",0]},\"timestamp\":{\"$arrayElemAt\":[\"$currentDateTime.currentTime\",0]},\"pos_date\":{\"$arrayElemAt\":[\"$posDate.posDate\",0]}}}]",                "extract_file_location": "{{ local_storage.filepath }}/test_area/",
+                "header": true,
+                "header_columns": [
+                    "record_count",
+                    "timestamp",
+                    "pos_date"
+                ],
+                "file_name_format": {
+                    "base_file_name": "extrct_sit_mongodb_json_table_d",
+                    "date_suffix": "{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}"
+                },
+                "full_file_name": "{{ base_file_name }}_{{ date_suffix }}",
+                "file_extension": "ctl",
+                "file_option": {
+                    "mode": "a",
+                    "newline": "",
+                    "encoding": "utf-8"
+                },
+                "write_property": {
+                    "header": true,
+                    "option": {
+                        "delimiter": "|",
+                        "quotechar": "\"",
+                        "quoting": "QUOTE_ALL",
+                        "escapechar": "\\"
+                    }
+                }
+            }
+        },
+        "azcopy_data_transfer_task": {
+            "module_name": "AzCopyDataTransferTask",
+            "bypass_flag": false,
+            "parameters": {
+                "azcopy_command": "cp",
+                "source": {
+                    "type": "LocalLocation",
+                    "filepath": "{{ local_storage.filepath }}/test_area/extrct_sit_mongodb_json_table_d_{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}*"
+                },
+                "target": {
+                    "type": "ADLSLocation",
+                    "account_name": "{{ mdp_inbnd.account_name }}",
+                    "container_name": "{{ mdp_inbnd.container_name }}",
+                    "sas_token": "{{ mdp_inbnd.sas_token }}",
+                    "filepath": "{{ mdp_inbnd.filepath }}/fw_test/azcopy/"
+                }
+            }
+        }
+    }
+}

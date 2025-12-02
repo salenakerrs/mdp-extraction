@@ -1,0 +1,29 @@
+{
+    "job_name": "extrct_trf_fwtest_unzip_pgp_sample_sit_d",
+    "pipeline_name": "ExtractionPipeline",
+    "area_name": "test_area",
+    "job_seq": 1,
+    "job_info": {
+        "data_source_name": "TEST_SOURCE",
+        "file_name": "extrct_sit_unzip_pgp_test_d_{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}.zip",
+        "data_target_type": "AZURE_STORAGE_ACCOUNT",
+        "data_target_location": "fw_test/pgp/extrct_sit_unzip_pgp_test_d_{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}.zip"
+    },
+    "tasks": {
+        "file_extractor_task": {
+            "module_name": "ZipFileExtractorTask",
+            "bypass_flag": false,
+            "parameters": {
+                "source_file_location": "{{ local_storage.filepath }}/test_area/test_compress.zip"
+            }
+        },
+        "file_decryptor_task": {
+            "module_name": "PgpFileDecryptorTask",
+            "bypass_flag": false,
+            "parameters": {
+                "source_system_name": "KS",
+                "file_name_suffix":"_decrypted"
+            }
+        }
+    }
+}

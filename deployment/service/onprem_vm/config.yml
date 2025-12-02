@@ -1,0 +1,11 @@
+# onprem vm files location config
+file_location_config:
+  volumes:
+    script_app: "/app_mdp/mdp/script/extraction/"
+    sit_test: "/test/mdp/sit/mdp_extraction_framework/"
+    exclude_existing_files:
+      - "/app_mdp/mdp/script/extraction/.env.secret"
+      - "/app_mdp/mdp/script/extraction/hsm_service/AES.class"
+      - "/app_mdp/mdp/script/extraction/hsm_service/HSMService.class"
+      - "/app_mdp/mdp/script/extraction/hsm_service/Util.class"
+      - "/app_mdp/mdp/script/extraction/pgp_decryption/EBAN_71802_ks-private.asc"

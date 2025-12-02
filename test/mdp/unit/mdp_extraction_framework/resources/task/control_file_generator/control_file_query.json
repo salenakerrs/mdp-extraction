@@ -1,0 +1,49 @@
+[
+  {
+      "$facet": {
+          "count": [
+              {
+                  "$count": "total"
+              }
+          ],
+          "currentDateTime": [
+              {
+                  "$addFields": {
+                      "currentTime": {
+                          "$toDate": "$$NOW"
+                      }
+                  }
+              }
+          ],
+          "posDate": [
+              {
+                  "$addFields": {
+                      "posDate": "{{pos_dt}}"
+                  }
+              }
+          ]
+      }
+  },
+  {
+      "$project": {
+          "record_count": {
+              "$arrayElemAt": [
+                  "$count.total",
+                  0
+              ]
+          },
+          "timestamp": {
+              "$arrayElemAt": [
+                  "$currentDateTime.currentTime",
+                  0
+              ]
+          },
+          "pos_date": {
+              "$arrayElemAt": [
+                  "$posDate.posDate",
+                  0
+              ]
+          }
+      }
+  }
+]

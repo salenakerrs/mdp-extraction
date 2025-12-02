@@ -1,0 +1,118 @@
+[tool.poetry]
+name = "mdp-extraction-framework"
+version = "0.20.0"
+
+description = "framework: 814--framework--mdp-extraction-framework"
+authors = []
+readme = "README.md"
+packages = [{ include = "mdp", from = "src" }]
+
+[tool.poetry.scripts]
+mdp_extraction_framework = "mdp.framework.mdp_extraction_framework.__main__:entrypoint"
+mdp_extraction_framework_utils = "mdp.framework.mdp_extraction_framework.utils:entrypoint"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+python-dateutil = "2.9.0"
+pre-commit = "^3.8.0"
+pydantic = ">=2.6"
+pydantic-settings = "^2.2.1"
+sqlalchemy = "2.0.24"
+pyodbc = "5.0.1"
+jinja2 = "^3.1.4"
+cx-oracle = "^8.3.0"
+tenacity = "^8.2.3"
+pytest = "^7.4.2"
+pytest-cov = "^4.1.0"
+pytest-html = "^4.1.1"
+pytest-lazy-fixture = "^0.6.3"
+pandas = "^2.2.1"
+numpy = "^1.0.0"
+pycryptodome = "^3.16.0"
+pgpy = "^0.6.0"
+ibm-db = "3.2.3"
+ibm-db-sa = "^0.4.1"
+pymongo = "^4.10.1"
+deltalake = "^0.22.3"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "^1.5.3"
+
+
+[[tool.poetry.source]]
+name = "azure_devops"
+url = "https://pkgs.dev.azure.com/kbtg-mdp/KSoft-TH-MDP/_packaging/KSoft-TH-MDP/pypi/simple/"
+priority = "supplemental"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.isort]
+profile = "black"
+known_pyspark = ["pyspark"]
+known_framework = ["framework"]
+sections = [
+    "FUTURE",
+    "STDLIB",
+    "PYSPARK",
+    "FRAMEWORK",
+    "FIRSTPARTY",
+    "THIRDPARTY",
+    "LOCALFOLDER",
+]
+import_heading_stdlib = "import: standard" # a module as part of Python's standard library.
+import_heading_pyspark = "import: pyspark"
+import_heading_framework = "import: framework"
+import_heading_firstparty = "import: internal" # a module as being part of the current python project.
+import_heading_future = "import: future" # a module as part of Python's internal future compatibility libraries.
+import_heading_thirdparty = "import: external" # a module as being part of a third party library.
+line_length = 100
+force_single_line = true
+skip_glob = ["docs/*", "conf/*", "experiments/*", "setup/*"]
+
+[tool.mypy] # only run on src
+ignore_missing_imports = true
+no_strict_optional = true
+show_error_context = true
+pretty = true
+disable_error_code = ["attr-defined"]
+
+[tool.black]
+line-length = 100
+force-exclude = "/(docs|conf|experiments|setup)/"
+
+[tool.ruff]
+extend-exclude = ["docs/*", "conf/*", "experiments/*", "setup/*"]
+show-fixes = true
+
+[tool.interrogate]
+ignore-init-method = false                                  # Ignore __init__ method of classes. [default: False]
+ignore-init-module = false                                  # Ignore __init__.py modules. [default: False]
+ignore-magic = false                                        # Ignore all magic methods of classes. [default: False]
+ignore-semiprivate = false                                  # Ignore semiprivate classes, methods, and functions starting with a single underscore.
+ignore-private = false                                      # Ignore private classes, methods, and functions starting with two underscores. [default: False]
+ignore-property-decorators = false                          # Ignore methods with property setter/getter decorators. [default: False]
+ignore-module = false                                       # Ignore module-level docstrings. [default: False]
+ignore-nested-functions = false                             # Ignore nested functions and methods. [default: False]
+ignore-nested-classes = false                               # Ignore nested classes. [default: False]
+ignore-setters = false                                      # Ignore methods with property setter decorators. [default: False]
+fail-under = 90                                             # Fail when coverage % is less than a given amount. [default: 80.0]
+exclude = ["setup", "docs", "experiments", "conf", "build"]
+verbose = 0                                                 # possible values: 0 (minimal output), 1 (-v), 2 (-vv)
+quiet = false                                               # Do not print output [default: False]
+whitelist-regex = []
+color = true                                                # Toggle color output on/off when printing to stdout. [default: color] or no-color
+omit-covered-files = false                                  # Omit reporting files that have 100% documentation coverage.
+ignore-regex = []
+# generate-badge = "./interrogate_badge.svg"                  # Generate a shields.io status badge (an SVG image) in at a given file or directory.
+# badge-format = "svg"                                        # Format of the badge to generate. [default: svg]
+
+[tool.poetry_bumpversion.file."src/mdp/framework/mdp_extraction_framework/__init__.py"]
+# Duplicate the line above to add more files

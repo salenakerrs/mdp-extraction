@@ -1,0 +1,21 @@
+[
+  {
+    "$project": {
+      "_id": 1,
+      "campaign_id": 1,
+      "cis_id": 1,
+      "campaign_name": 1,
+      "tier_tier_id": { "$arrayElemAt": ["$tiers.tier_id", 0] },
+      "tier_tier_name": { "$arrayElemAt": ["$tiers.tier_name", 0] },
+      "tier_start_progress": { "$arrayElemAt": ["$tiers.start_progress", 0] },
+      "tier_end_progress": { "$arrayElemAt": ["$tiers.end_progress", 0] },
+      "tier_unit": { "$arrayElemAt": ["$tiers.unit", 0] },
+      "tier_point_amount": { "$arrayElemAt": ["$tiers.point_amount", 0] },
+      "tier_group_id": { "$arrayElemAt": ["$tiers.group_id", 0] },
+      "tier_remain": { "$arrayElemAt": ["$tiers.remain", 0] }
+    }
+  },
+  {
+    "$limit": 300
+  }
+]

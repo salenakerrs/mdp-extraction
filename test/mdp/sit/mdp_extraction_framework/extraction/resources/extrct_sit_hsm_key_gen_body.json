@@ -1,0 +1,58 @@
+{
+    "job_name": "extrct_sit_hsm_key_gen_body",
+    "pipeline_name": "ExtractionPipeline",
+    "area_name": "test_area",
+    "job_seq": 1,
+    "job_info": {
+        "data_source_name": "TEST_SOURCE",
+        "file_name": "extrct_sit_hsm_key_body_d_{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}.txt",
+        "data_target_type": "AZURE_STORAGE_ACCOUNT",
+        "data_target_location": "fw_test/unzip/extrct_sit_hsm_key_body_d_{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}.txt"
+    },
+    "tasks": {
+        "hsm_encryption_key_file_generator_task": {
+            "module_name": "HSMEncryptionKeyFileGeneratorTask",
+            "bypass_flag": false,
+            "parameters": {
+                "source_file_location": "/datasource/inbound/source_file/mdp/test_area/extrct_sit_hsm_key_body_d_20240806.txt",
+                "length_mapping_config": {
+                    "body": [
+                        {
+                            "field_name": "tlf_enc_key",
+                            "size": 32,
+                            "offset": 1501,
+                            "type": "string"
+                        }
+                    ]
+                },
+                "number_of_row_header": 1,
+                "number_of_row_footer": 1,
+                "reader_options": {"encoding": "cp1252"},
+                "header_columns": [
+                    "date_of_key",
+                    "date_of_generated_key",
+                    "encrypted_key",
+                    "hsm_key",
+                    "data_file_name"
+                ],
+                "file_name_format": {
+                    "base_file_name": "extrct_sit_hsm_key_body_d",
+                    "date_suffix": "{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}"
+                },
+                "full_file_name": "{{ base_file_name }}_{{ date_suffix }}",
+                "file_extension": "key",
+                "file_option": {
+                    "mode": "w",
+                    "newline": "",
+                    "encoding": "utf-8"
+                },
+                "write_property": {
+                    "header": true,
+                    "option": {
+                        "delimiter": "|"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,4 @@
+workflow_deploy_inputs:
+  ref: v0.4.0
+  baseline_no: MDP_FRAMEWORK_BSL_0008
+  deployment_sequence: default

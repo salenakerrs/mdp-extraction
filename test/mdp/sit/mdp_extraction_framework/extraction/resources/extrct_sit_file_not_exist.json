@@ -1,0 +1,32 @@
+{
+    "job_name": "extrct_trf_fwtest_mssql_sample_sit_d",
+    "pipeline_name": "ExtractionPipeline",
+    "area_name": "test_area",
+    "job_seq": 1,
+    "job_info": {
+        "data_source_name": "TEST_SOURCE",
+        "file_name": "not_exist.csv",
+        "data_target_type": "AZURE_STORAGE_ACCOUNT",
+        "data_target_location": "fw_test/azcopy/not_exist_file_{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}.csv"
+    },
+    "tasks": {
+        "azcopy_data_transfer_task": {
+            "module_name": "AzCopyDataTransferTask",
+            "bypass_flag": false,
+            "parameters": {
+                "azcopy_command": "cp",
+                "source": {
+                    "type": "LocalLocation",
+                    "filepath": "{{ local_storage.filepath }}/test_area/not_exist_file_{{ ptn_yyyy }}{{ ptn_mm }}{{ ptn_dd }}*"
+                },
+                "target": {
+                    "type": "ADLSLocation",
+                    "account_name": "{{ mdp_inbnd.account_name }}",
+                    "container_name": "{{ mdp_inbnd.container_name }}",
+                    "sas_token": "{{ mdp_inbnd.sas_token }}",
+                    "filepath": "{{ mdp_inbnd.filepath }}/fw_test/azcopy/"
+                }
+            }
+        }
+    }
+}

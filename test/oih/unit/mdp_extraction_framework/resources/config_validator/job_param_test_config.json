@@ -1,0 +1,21 @@
+{
+    "area_name": "test_area",
+    "job_seq": 1,
+    "job_name": "test_job",
+    "pipeline_name": "IngestionPipeline",
+    "job_info": {},
+    "tasks": {
+        "read_source_file_task": {
+            "module_name": "ParquetSourceFileReaderTask",
+            "bypass_flag": "False",
+            "parameters": {
+                "filter_cond": "ptn_yyyy = '{{ptn_yyyy}}'",
+                "date": "{{ptn_dd}}",
+                "month": "{{ptn_mm}}",
+                "year": "{{ptn_yyyy}}",
+                "year_be" : "{{ptn_yyyy_be}}",
+                "quarter" : "{{ptn_qtr}}"
+            }
+        }
+    }
+}

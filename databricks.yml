@@ -1,0 +1,15 @@
+bundle:
+  name: 814--framework--mdp-extraction-framework
+
+include:
+  - "./deployment/service/databricks/bundle/bundle*.yml"
+
+workspace:
+  root_path: "/.bundle/${bundle.name}/${bundle.target}"
+  file_path: "/"
+  artifact_path: "/.bundle/${bundle.name}/${bundle.target}/artifacts"
+  state_path: "/.bundle/${bundle.name}/${bundle.target}/state"
+
+sync:
+  exclude:
+    - "**/*"

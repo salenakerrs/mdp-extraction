@@ -1,0 +1,18 @@
+{
+    "job_name": "test_job",
+    "pipeline_name": "TestPipeline",
+    "tasks": {
+        "sample_task": {
+            "module_name": "SampleTask",
+            "bypass_flag": false,
+            "parameters": {
+                "pos_dt": "{{pos_dt}}",
+                "date": "{{ptn_dd}}",
+                "month": "{{ptn_mm}}",
+                "year": "{{ptn_yyyy}}",
+                "year_be": "{{ptn_yyyy_be}}",
+                "quarter": "{{ptn_qtr}}"
+            }
+        }
+    }
+}

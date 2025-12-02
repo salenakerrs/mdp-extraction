@@ -1,0 +1,41 @@
+{
+    "job_name": "pi_delimited_comma",
+    "job_info": {
+        "source_name": "EBAN",
+        "raw_catalog_name": "mdfdev_p1",
+        "raw_database_name": "test_ingestion_db",
+        "raw_table_name": "raw_delimited_pipe",
+        "persist_catalog_name": "mdfdev_p1",
+        "persist_database_name": "test_ingestion_db",
+        "persist_table_name": "persist_delimited_pipe"
+    },
+    "mapping": [
+        {
+            "source_column_name": "name",
+            "target_column_name": "name",
+            "data_type": "string",
+			"column_logic":"upper(name)"
+        },
+        {
+            "source_column_name": "surname",
+            "target_column_name": "surname",
+            "data_type": "string",
+			"column_logic":"upper(surname)"
+        },
+        {
+            "source_column_name": "age",
+            "target_column_name": "age",
+            "data_type": "integer"
+        },
+        {
+            "source_column_name": "birth_date",
+            "target_column_name": "birth_date",
+            "data_type": "date"
+        },
+        {
+            "target_column_name": "birth_month",
+            "data_type": "integer",
+            "column_logic": "month(birth_date)"
+        }
+    ]
+}
