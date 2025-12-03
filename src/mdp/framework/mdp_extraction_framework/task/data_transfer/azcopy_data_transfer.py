@@ -4,7 +4,6 @@
 import glob
 import json
 import os
-import re
 from pathlib import Path
 from typing import List
 from typing import Optional
@@ -51,13 +50,10 @@ class ADLSLocation(BaseModel, extra="allow"):  # type: ignore[call-arg]
     filepath_without_token: Optional[str] | None = ""
     cleanup_file_pattern: str
 
-    def update_adls_filepath_url(self, auth_mode: str = "sas"):
+    def update_adls_filepath_url(self):
         """Function for getting the ADLS storage url from each attribute."""
         storage_url = f"https://{self.account_name}.blob.core.windows.net/{self.container_name}/{self.filepath}"
-        if auth_mode == "sas":
-            storage_url_token = f"{storage_url}?{self.sas_token}"
-        else:
-            storage_url_token = f"{storage_url}"
+        storage_url_token = f"{storage_url}?{self.sas_token}"
         return self.model_copy(
             update={"filepath_without_token": storage_url, "filepath": storage_url_token}
         )
@@ -81,7 +77,6 @@ class DataTransferTaskConfigModel(BaseModel):
     archive_flag: Optional[str] | None = "False"
     archive_path: Optional[str] | None = ""
     cleanup_source_flag: Optional[str] | None = "False"
-    auth_mode: Optional[str] | None = "sas"
 
 
 def check_file_exists(file_path):
@@ -198,8 +193,7 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
         allow_empty_file: str = "False",
         allow_zero_file: str = "True",
     ) -> List[str]:
-        """
-        Transfer files from a source location to a target location using AzCopy and
+        """Transfer files from a source location to a target location using AzCopy and
         return a list of successfully transferred files.
 
         This function wraps the AzCopy command with a retry mechanism to ensure robust
@@ -321,7 +315,7 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
             file_exists=True,
         )
 
-        self.logger.info(f"AzCopy stdout:\n{command_result.output}")
+        self.logger.debug(f"AzCopy stdout:\n{command_result.output}")
 
         # -------------------------------------------------------------------------
         # 4) Parse summary from AzCopy JSON-line stdout
@@ -419,7 +413,6 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
         cleanup_options: str,
         sas_token: str = None,
         azcopy_command: str = "rm",
-        auth_mode: str = "sas",
     ) -> None:
         """Cleanup files at the destination ADLS before transfer, to support rerunning
         multiple files.
@@ -437,19 +430,11 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
 
         cleanup_file_pattern = os.path.basename(cleanup_file_pattern)
         # Run azcopy command to cleanup existing files
-        if auth_mode == "sas":
-            cleanup_command = f"azcopy rm '{cleanup_filepath}?{sas_token}' --include-pattern '{cleanup_file_pattern}' {cleanup_options}"
-            # Log cleanup command without sas_token
-            self.logger.info(
-                f"Cleanup command: azcopy rm '{cleanup_filepath}?<sas_token>' --include-pattern '{cleanup_file_pattern}'"
-            )
-
-        if auth_mode == "service_principal":
-            cleanup_command = f"azcopy rm '{cleanup_filepath}' --include-pattern '{cleanup_file_pattern}' {cleanup_options}"
-            # Log cleanup command without sas_token
-            self.logger.info(
-                f"Cleanup command: azcopy rm '{cleanup_filepath}' --include-pattern '{cleanup_file_pattern}'"
-            )
+        cleanup_command = f"azcopy rm '{cleanup_filepath}?{sas_token}' --include-pattern '{cleanup_file_pattern}' {cleanup_options}"
+        # Log cleanup command without sas_token
+        self.logger.info(
+            f"Cleanup command: azcopy rm '{cleanup_filepath}?<sas_token>' --include-pattern '{cleanup_file_pattern}'"
+        )
 
         command_result = run_command(command=cleanup_command)
 
@@ -472,7 +457,7 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
             source_validate_class = get_class_object(__name__, self.module_config.source["type"])
             source_config = source_validate_class(**self.module_config.source)
             if self.module_config.source["type"] == "ADLSLocation":
-                source_config = source_config.update_adls_filepath_url(self.module_config.auth_mode)
+                source_config = source_config.update_adls_filepath_url()
             source_configs = [source_config]
         elif self.files_to_transfer:
             source_configs = [
@@ -493,9 +478,7 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
                 cleanup_file_pattern=os.path.basename(source_config.filepath),
             )
             if self.module_config.target["type"] == "ADLSLocation":
-                target_configs = target_configs.update_adls_filepath_url(
-                    self.module_config.auth_mode
-                )
+                target_configs = target_configs.update_adls_filepath_url()
 
             # Cleanup existing files with the same pattern on the destination
             if self.module_config.cleanup_dest_flag == "True":
@@ -506,7 +489,6 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
                     cleanup_options=self.module_config.cleanup_options,
                     azcopy_command="rm",
                     sas_token=str(target_configs.sas_token),
-                    auth_mode=self.module_config.auth_mode,
                 )
 
                 self.logger.info(
