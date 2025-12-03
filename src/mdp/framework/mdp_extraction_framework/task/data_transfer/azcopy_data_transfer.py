@@ -196,181 +196,216 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
         azcopy_command: str = "cp",
         azcopy_options: str = "",
         allow_empty_file: str = "False",
-        allow_zero_file: str = "False",
-        enforce_match: bool = True,  # raise if AzCopy success set != planned source_files
+        allow_zero_file: str = "True",
     ) -> List[str]:
-        """Run AzCopy and return full source file paths that actually transferred
-        successfully."""
+        """
+        Transfer files from a source location to a target location using AzCopy and
+        return a list of successfully transferred files.
+
+        This function wraps the AzCopy command with a retry mechanism to ensure robust
+        data transfer. It inspects AzCopy JSON-formatted stdout to determine the outcome
+        of the transfer operation, including the total number of files processed,
+        the number successfully completed, and whether any failures occurred.
+
+        Behaviour:
+            * If AzCopy transfers one or more files successfully, the function returns a
+            list of the planned source file paths.
+            * If AzCopy performs zero transfers (e.g. wildcard did not match files,
+            destination up-to-date, or no files to process), the function returns an
+            empty list and does NOT raise an exception.
+            * If AzCopy reports failed transfers, a RuntimeError is raised and the retry
+            policy may re-attempt the transfer.
+            * The retry policy is configured via the @retry decorator and applies only
+            when exceptions are raised (e.g. connection issues, authentication errors,
+            or explicit AzCopy failures).
+
+        Args:
+            data_source_location (str):
+                The source path for the files to transfer. Supports local paths, remote
+                URLs, or wildcard patterns (e.g. '*.csv').
+            data_target_location (str):
+                The Azure Data Lake Storage (ADLS) or blob storage location where files
+                will be transferred.
+            azcopy_command (str, optional):
+                The AzCopy command to execute. Defaults to "cp" for file copy operations.
+                Other commands such as "sync" may also be used if supported by AzCopy.
+            azcopy_options (str, optional):
+                Additional command-line options to pass to AzCopy, such as
+                '--recursive', '--overwrite=ifSourceNewer', or performance tuning flags.
+            allow_empty_file (str, optional):
+                Flag passed through to `validate_transfer_file` to determine whether a
+                zero-byte transferred file is considered valid. Defaults to "False".
+            allow_zero_file (str, optional):
+                Controls how zero-transfer scenarios are handled. When "True", zero
+                transfers are treated as success and the function returns an empty list
+                rather than raising an exception. Defaults to "True".
+
+        Returns:
+            List[str]:
+                A list of file paths that were successfully transferred. For local
+                sources, this corresponds to the resolved absolute paths of the planned
+                files. For remote sources without local file resolution, this contains
+                the original `data_source_location` entry. An empty list is returned when
+                no file transfers were performed.
+
+        Raises:
+            FileNotFoundError:
+                Raised when planned local source files do not exist.
+            RuntimeError:
+                Raised when AzCopy reports one or more failed transfers.
+            Any exception raised by `validate_transfer_file` or the retrying logic if
+                AzCopy encounters operational errors (authentication, network, exit code
+                issues, etc.).
+
+        Notes:
+            * The retry behaviour is implemented using `tenacity` and applies only when
+            exceptions are raised.
+            * `--output-type=json` is automatically appended to the AzCopy command to
+            enable structured parsing of progress and result details.
+            * This function does not invoke 'azcopy jobs show' and relies solely on the
+            structured progress messages emitted by AzCopy for determining success.
+        """
         self.logger.info(f"Start AzCopy file transfer. Retry count: {self.copy_retry_count}")
         self.copy_retry_count += 1
 
-        # 1) Expand to concrete full paths (file, folder, or glob)
+        # -------------------------------------------------------------------------
+        # 1) Build planned source_files list (local paths or the original source)
+        # -------------------------------------------------------------------------
         if any(ch in data_source_location for ch in ["*", "?", "[", "]"]):
+            # Local glob pattern
             source_files = [str(Path(p).resolve()) for p in glob.glob(data_source_location)]
+            if not source_files:
+                self.logger.info(
+                    f"AzCopy source pattern '{data_source_location}' matched 0 local files; "
+                    "calling AzCopy anyway and will accept 0 transfers."
+                )
+                source_files = []
         else:
-            p = Path(data_source_location).resolve()
-            if p.is_dir():
-                # If a directory is passed without --recursive in options, user may intend only top-level.
-                # Respect caller's azcopy_options (user can pass --recursive when needed).
-                source_files = [str(x.resolve()) for x in p.iterdir() if x.is_file()]
+            p = Path(data_source_location)
+            if p.exists():
+                p = p.resolve()
+                if p.is_dir():
+                    # Caller can control recursion with azcopy_options
+                    source_files = [str(x.resolve()) for x in p.iterdir() if x.is_file()]
+                else:
+                    source_files = [str(p)]
             else:
-                source_files = [str(p)]
+                # Remote URL or non-local path – let AzCopy handle it.
+                source_files = [data_source_location]
 
         self.logger.debug(f"Planned files to transfer ({len(source_files)}): {source_files}")
 
-        # Quick sanity: planned files must exist locally
-        if not all(Path(f).exists() for f in source_files):
+        # Optional local-existence check if you only expect local paths
+        if all(not f.startswith("http") for f in source_files):
             missing = [f for f in source_files if not Path(f).exists()]
-            raise FileNotFoundError(f"Planned source files not found: {missing}")
+            if missing:
+                raise FileNotFoundError(f"Planned source files not found: {missing}")
 
-        # 2) Run azcopy with JSON output to capture JobID
+        # -------------------------------------------------------------------------
+        # 2) Run AzCopy with JSON output
+        # -------------------------------------------------------------------------
         cmd = (
             f"azcopy {azcopy_command} '{data_source_location}' '{data_target_location}' "
             f"{azcopy_options} --cap-mbps={AZCOPY_CAP_MBPS} --output-type=json"
         )
         command_result = run_command(command=cmd)
 
-        # Validate as you already do
+        # -------------------------------------------------------------------------
+        # 3) Global validation (exit code, zero transfers, etc.)
+        # -------------------------------------------------------------------------
         validate_transfer_file(
             azcopy_output=command_result,
             retry_count=self.copy_retry_count - 1,
             allow_empty_file=allow_empty_file,
             allow_zero_file=allow_zero_file,
-            file_exists=True,  # we already checked existence above
+            file_exists=True,
         )
 
         self.logger.info(f"AzCopy stdout:\n{command_result.output}")
 
-        # 3) Extract JobID from stdout (AzCopy prints something like: "Job ... has started")
-        #    We'll match UUID-like strings or JobId fields in JSON chunks.
-        # 3) Extract JobID from stdout
-        job_id = None
-        full_output = command_result.output or ""
+        # -------------------------------------------------------------------------
+        # 4) Parse summary from AzCopy JSON-line stdout
+        # -------------------------------------------------------------------------
+        total: Optional[int] = None
+        completed: Optional[int] = None
+        failed: Optional[int] = None
+        job_status: Optional[str] = None
 
-        # Prefer structured parsing: each line is a JSON event from AzCopy
-        for line in full_output.splitlines():
+        stdout = command_result.output or ""
+
+        for line in stdout.splitlines():
             line = line.strip()
             if not line:
                 continue
+
             try:
                 evt = json.loads(line)
             except json.JSONDecodeError:
                 continue
 
-            # 3.1 Try direct JobId fields at top level (future-proofing)
-            job_id = (
-                evt.get("JobId")
-                or evt.get("JobID")
-                or evt.get("jobId")
-                or (evt.get("Info") or {}).get("JobId")
-                or (evt.get("info") or {}).get("jobId")
-            )
-            if job_id:
-                break
-
-            # 3.2 Many AzCopy versions put JobID inside MessageContent as a JSON string
-            msg = evt.get("MessageContent")
-            if not msg or not isinstance(msg, str):
+            if evt.get("MessageType") not in ("Progress", "EndOfJob"):
                 continue
 
-            # If MessageContent itself is JSON, parse it
-            mc = msg.strip()
-            if mc.startswith("{") and mc.endswith("}"):
+            msg = evt.get("MessageContent")
+            if not isinstance(msg, str):
+                continue
+
+            try:
+                inner = json.loads(msg)
+            except json.JSONDecodeError:
+                continue
+
+            if "TotalTransfers" in inner:
                 try:
-                    inner = json.loads(mc)
-                    job_id = inner.get("JobID") or inner.get("JobId") or inner.get("jobId")
-                    if job_id:
-                        break
-                except json.JSONDecodeError:
-                    # Not valid JSON, ignore
+                    total = int(inner["TotalTransfers"])
+                except (TypeError, ValueError):
                     pass
 
-        # 3.3 Fallback regex for safety (handles escaped \"JobID\" inside strings)
-        if not job_id:
-            # Match \"JobID\":\"<value>\" with optional escaping
-            m = re.search(r'\\?"JobID"\\?"\s*:\s*\\?"([^"\\]+)', full_output)
-            if m:
-                job_id = m.group(1)
+            if "TransfersCompleted" in inner:
+                try:
+                    completed = int(inner["TransfersCompleted"])
+                except (TypeError, ValueError):
+                    pass
 
-        # 3.4 Final fallback: try the "Job <id> has started" style, if AzCopy ever prints that
-        if not job_id:
-            m = re.search(r"Job\s+([0-9a-fA-F-]{8,})\s+has started", full_output)
-            if m:
-                job_id = m.group(1)
+            if "TransfersFailed" in inner:
+                try:
+                    failed = int(inner["TransfersFailed"])
+                except (TypeError, ValueError):
+                    pass
 
-        if not job_id:
+            if "JobStatus" in inner:
+                job_status = inner["JobStatus"]
+
+        self.logger.info(
+            f"AzCopy summary: JobStatus={job_status}, "
+            f"TotalTransfers={total}, TransfersCompleted={completed}, TransfersFailed={failed}"
+        )
+
+        # -------------------------------------------------------------------------
+        # 5) Behaviour check
+        # -------------------------------------------------------------------------
+        # 5.1 No files transferred → success, return empty list (no retry)
+        if total == 0:
+            self.logger.info(
+                "AzCopy reported TotalTransfers=0; treating as successful no-op and returning []."
+            )
+            return []
+
+        # 5.2 If AzCopy reports failures → raise so @retry can re-attempt
+        if failed is not None and failed > 0:
+            raise RuntimeError(
+                f"AzCopy reported failed transfers: TransfersFailed={failed} / TotalTransfers={total}"
+            )
+
+        # 5.3 If counts are slightly odd, warn but still return planned list
+        if completed is not None and total is not None and completed != total:
             self.logger.warning(
-                "Could not determine AzCopy JobId from output; returning planned source_files."
-            )
-            return source_files
-
-        # 4) Query the job details to get per-file transfer statuses
-        show_cmd = f"azcopy jobs show {job_id} --with-status=All --output-type=json"
-        show_result = run_command(command=show_cmd)
-
-        if show_result.exit_code != 0:
-            self.logger.warning(
-                f"azcopy jobs show failed (exit {show_result.exit_code}). "
-                f"Falling back to planned source_files. Output:\n{show_result.output}\nErr:\n{show_result.error}"
-            )
-            return source_files
-
-        # Parse the jobs show JSON
-        # Structure varies by version; look for a list of transfers with Source and Status fields.
-        successful_sources = set()
-        try:
-            # jobs show may output multiple JSONs; take last valid object
-            last_obj = None
-            for line in show_result.output.splitlines():
-                line = line.strip()
-                if line.startswith("{") and line.endswith("}"):
-                    last_obj = json.loads(line)
-            if not last_obj:
-                raise ValueError("No JSON object found in jobs show output.")
-
-            # Find transfers array (name differs across versions; try common keys)
-            transfers = (
-                last_obj.get("Transfers")
-                or last_obj.get("transfers")
-                or (last_obj.get("DetailedStatus") or {}).get("Transfers")
-                or (last_obj.get("detailedStatus") or {}).get("transfers")
-                or []
+                f"AzCopy TransfersCompleted ({completed}) != TotalTransfers ({total}). "
+                "Returning planned source_files; check logs if this is unexpected."
             )
 
-            for t in transfers:
-                status = t.get("Status") or t.get("status")
-                source = t.get("Source") or t.get("source")
-                if status and source and status.lower() == "success":
-                    # Normalize to local path if azcopy reports file:// or plain paths
-                    # If your sources are local files, azcopy usually echoes them as absolute local paths.
-                    successful_sources.add(str(Path(source).resolve()))
-        except Exception as ex:
-            self.logger.warning(
-                f"Failed to parse jobs show JSON ({ex}); falling back to planned source_files."
-            )
-            return source_files
-
-        # 5) Enforce equality (optional) and return the successful list
-        planned_set = set(source_files)
-
-        if enforce_match:
-            # Some AzCopy sources (e.g., directory with --recursive) may not list every file path identically.
-            # We compare by filename or by normalized absolute path.
-            if successful_sources != planned_set:
-                # Provide a helpful diff
-                missing = sorted(planned_set - successful_sources)
-                unexpected = sorted(successful_sources - planned_set)
-                details = []
-                if missing:
-                    details.append(f"Missing (planned but not reported success): {missing}")
-                if unexpected:
-                    details.append(f"Unexpected (reported success but not planned): {unexpected}")
-                raise RuntimeError(
-                    "AzCopy success set does not match planned sources. " + " | ".join(details)
-                )
-
-        # Return only truly successful source file paths (full paths)
-        return sorted(successful_sources) if successful_sources else source_files
+        # If we reach here, we treat all planned files as successfully transferred
+        return source_files
 
     @retry(
         wait=wait_exponential(multiplier=1.5, min=20, max=300),
@@ -474,9 +509,9 @@ class AzCopyDataTransferTask(BaseDataTransferTask):
                     auth_mode=self.module_config.auth_mode,
                 )
 
-            self.logger.info(
-                f"Cleaned up file with pattern: {target_configs.cleanup_file_pattern} completed."
-            )
+                self.logger.info(
+                    f"Cleaned up file with pattern: {target_configs.cleanup_file_pattern} completed."
+                )
 
             # Execute data transfer
             success_file = self.azcopy_transfer_file(
